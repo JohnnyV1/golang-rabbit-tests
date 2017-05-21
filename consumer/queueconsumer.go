@@ -3,26 +3,23 @@ package main
 import (
 	"fmt"
 	"log"
-	"runtime"
-
-	"time"
-
 	"os"
-
+	"runtime"
 	"sync"
+	"time"
 
 	"github.com/streadway/amqp"
 )
 
-var counter int
-var starttime time.Time
-var mu sync.Mutex
+var counter int         //keeps track of messages processed
+var starttime time.Time //time before goroutines started
+var mu sync.Mutex       //sync between shared goroutine state
 
 const (
-	numberOfMessages        int = 1000
-	numberOfGoRoutines          = 1000
-	inputToLargestPrimeFunc     = 10000
-	numberOfProcessors          = -1
+	numberOfMessages        int = 1000  //number of messages to publish to the queue
+	numberOfGoRoutines          = 1000  //number of goroutines to read messages off the queue and do work
+	inputToLargestPrimeFunc     = 10000 //input to the work function which each goroutine calls
+	numberOfProcessors          = -1    //number of processors to use for this program. -1 signifies use default.
 )
 
 func main() {
@@ -31,6 +28,7 @@ func main() {
 
 	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
 	failOnError(err, "Failed to connect to RabbitMQ")
+
 	defer conn.Close()
 
 	ch, err := conn.Channel()
