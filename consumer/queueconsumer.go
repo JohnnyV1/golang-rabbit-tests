@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/streadway/amqp"
+	"github.com/vinujohn/qsvc"
 )
 
 var counter int         //keeps track of messages processed
@@ -17,9 +18,8 @@ var mu sync.Mutex       //sync between shared goroutine state
 
 const (
 	numberOfMessages        int = 1000  //number of messages to publish to the queue
-	numberOfGoRoutines          = 1000  //number of goroutines to read messages off the queue and do work
 	inputToLargestPrimeFunc     = 10000 //input to the work function which each goroutine calls
-	numberOfProcessors          = -1    //number of processors to use for this program. -1 signifies use default.
+	numberOfProcessors          = -1    //number of processors to use for this program. -1 signifies use default which should be cores on the machine.
 )
 
 func main() {
@@ -60,44 +60,25 @@ func main() {
 		)
 	}
 
-	msgs, err := ch.Consume(
-		q.Name, // queue
-		"",     // consumer
-		true,   // auto-ack
-		false,  // exclusive
-		false,  // no-local
-		false,  // no-wait
-		nil,    // args
-	)
-
-	failOnError(err, "Failed to register a consumer")
-
-	forever := make(chan bool)
-
 	starttime = time.Now()
 
-	for i := 1; i <= numberOfGoRoutines; i++ {
-		go func(i int) {
-			for d := range msgs {
-				log.Printf("Received a message %d: %s\n", i, d.Body)
-				value, _ := largestPrimeFactor(inputToLargestPrimeFunc)
-				log.Printf("Largest prime %d\n", value)
-				exit()
-			}
-		}(i)
-	}
+	svc := qsvc.NewQueueService("amqp://guest:guest@localhost:5672/")
 
-	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
-	<-forever
-
+	svc.Receive("hello", receiver)
+}
+func receiver(b []byte) {
+	log.Printf("Received a message: %s\n", b)
+	value, _ := largestPrimeFactor(inputToLargestPrimeFunc)
+	log.Printf("Largest prime %d\n", value)
+	exit()
 }
 
 func exit() {
 	mu.Lock()
 	counter++
 	if counter == numberOfMessages {
-		i := time.Now().Unix() - starttime.Unix()
-		log.Printf("Time Taken: %d", i)
+		i := time.Since(starttime)
+		log.Printf("Time Taken: %d", (i.Nanoseconds() / int64(1000000)))
 		os.Exit(0)
 	}
 	mu.Unlock()
