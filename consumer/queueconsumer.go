@@ -33,11 +33,11 @@ type processor struct {
 	subscriberName string
 }
 
-func Process(b []byte) {
-	log.Printf("Received a message: %s\n", b)
+func (p processor) Process(b []byte) {
+	log.Printf("Received a message: %s for subscriber %s\n", b, p.subscriberName)
 	value, _ := largestPrimeFactor(inputToLargestPrimeFunc)
 	log.Printf("Largest prime %d\n", value)
-	exit()
+	//exit()
 }
 
 func main() {
@@ -77,19 +77,15 @@ func main() {
 		)
 	}
 
-	starttime = time.Now()
+	svc2 := qsvc.New("amqp://guest:guest@localhost:5672/")
 
-	svc := qsvc.New("amqp://guest:guest@localhost:5672/")
+	forever := make(chan bool)
 
-	s := svc.Subscribe("hello")
+	go svc2.Subscribe("hello", processor{subscriberName: "sub2"})
 
-	for t := range s {
-		Process(t)
-	}
+	go svc2.Subscribe("hello", processor{subscriberName: "sub3"})
 
-	// svc2 := qsvc.New("amqp://guest:guest@localhost:5672/")
-
-	// svc2.Subscribe("hello", processor{subscriberName: "sub2"})
+	<-forever
 
 }
 
