@@ -1,3 +1,7 @@
+//1,000,000 hello message processed in 140697 mm prefetchCount:0
+//1,000,000 hello message processed in 120268 mm prefetchCount:20
+//1,000,000 hello message processed in 103197 mm prefetchCount:100
+
 package main
 
 import (
@@ -5,8 +9,11 @@ import (
 	"log"
 	"os"
 	"runtime"
+	"strconv"
 	"sync"
 	"time"
+
+	"strings"
 
 	"github.com/streadway/amqp"
 	"github.com/vinujohn/qsvc"
@@ -17,10 +24,21 @@ var starttime time.Time //time before goroutines started
 var mu sync.Mutex       //sync between shared goroutine state
 
 const (
-	numberOfMessages        int = 1000  //number of messages to publish to the queue
-	inputToLargestPrimeFunc     = 10000 //input to the work function which each goroutine calls
-	numberOfProcessors          = -1    //number of processors to use for this program. -1 signifies use default which should be cores on the machine.
+	numberOfMessages        int = 1000 //number of messages to publish to the queue
+	inputToLargestPrimeFunc     = 1000 //input to the work function which each goroutine calls
+	numberOfProcessors          = -1   //number of processors to use for this program. -1 signifies use default which should be cores on the machine.
 )
+
+type processor struct {
+	subscriberName string
+}
+
+func Process(b []byte) {
+	log.Printf("Received a message: %s\n", b)
+	value, _ := largestPrimeFactor(inputToLargestPrimeFunc)
+	log.Printf("Largest prime %d\n", value)
+	exit()
+}
 
 func main() {
 
@@ -45,9 +63,8 @@ func main() {
 	)
 	failOnError(err, "Failed to declare a queue")
 
-	body := "hello"
-
 	for i := 0; i < numberOfMessages; i++ {
+		message := strings.Join([]string{"hello world ", strconv.FormatInt(int64(i), 10)}, "")
 		ch.Publish(
 			"",
 			q.Name,
@@ -55,22 +72,25 @@ func main() {
 			false,
 			amqp.Publishing{
 				ContentType: "text/plain",
-				Body:        []byte(body),
+				Body:        []byte(message),
 			},
 		)
 	}
 
 	starttime = time.Now()
 
-	svc := qsvc.NewQueueService("amqp://guest:guest@localhost:5672/")
+	svc := qsvc.New("amqp://guest:guest@localhost:5672/")
 
-	svc.Receive("hello", receiver)
-}
-func receiver(b []byte) {
-	log.Printf("Received a message: %s\n", b)
-	value, _ := largestPrimeFactor(inputToLargestPrimeFunc)
-	log.Printf("Largest prime %d\n", value)
-	exit()
+	s := svc.Subscribe("hello")
+
+	for t := range s {
+		Process(t)
+	}
+
+	// svc2 := qsvc.New("amqp://guest:guest@localhost:5672/")
+
+	// svc2.Subscribe("hello", processor{subscriberName: "sub2"})
+
 }
 
 func exit() {
